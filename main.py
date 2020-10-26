@@ -1,3 +1,5 @@
+#How to keep n futures running at any given time when jobs exceed workers?
+
 import concurrent.futures
 import threading
 import queue
@@ -35,41 +37,55 @@ def job(self):
         summer += 10
     print('EXIT JOB')
 '''
-MAX_WORKERS = 1000
-MIN_WORKERS = 800 # 200 threads allowed to fail
+WORKER_COUNT =10
 a = 0
 def job(num):
     global a
-    temp = 0
     try:
         with lock:
             a += num
-            temp = a
     except Exception as e:
         print('exception', e)
-jobs = [(job, i) for i in range(1000)]
+jobs = [(job, i) for i in range(1 + WORKER_COUNT)]
 
- 
+exitCounter = 0
+
+timePrev = 0
+
 def jobWrapper(jobFn, *args):
     def cb():
-        while threading.active_count() < MIN_WORKERS:
+        global exitCounter,a, timePrev
+        while threading.active_count() < WORKER_COUNT:
             pass
-        return jobFn(*args)
+        temp = jobFn(*args)
+        with lock:
+            exitCounter += 1
+        while exitCounter < len(jobs):
+            #if job scheduled, do job
+            pass
     return cb
-b = threading.Barrier(MIN_WORKERS)
+
+b = threading.Barrier(WORKER_COUNT)
+def idle():
+    return 0
 def barrierFn():
     b.wait()
 
 
 
 futures = []
-with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS, initializer=barrierFn) as executor:
+futuresOccupied = [] # -1 ->
+tasksCompleted = False
+with concurrent.futures.ThreadPoolExecutor(max_workers=WORKER_COUNT, initializer=barrierFn) as executor:
     ax = time.time()
     for i in range(len(jobs)):
         futures.append(executor.submit(jobWrapper(jobs[i][0], jobs[i][1])))
+    for i in range(WORKER_COUNT - len(jobs)):
+        futures.append(executor.submit(jobWrapper(idle)))
     bx = time.time()
     print(bx - ax)
 concurrent.futures.wait(futures, return_when='ALL_COMPLETED')
+tasksCompleted = True
 print(time.time() - bx)
 print(a)
 
