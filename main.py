@@ -46,7 +46,7 @@ def job(num):
             a += num
     except Exception as e:
         print('exception', e)
-jobs = [(job, i) for i in range(1 + WORKER_COUNT)]
+jobs = [(job, i) for i in range(WORKER_COUNT)]
 
 exitCounter = 0
 
@@ -58,8 +58,17 @@ def jobWrapper(jobFn, *args):
         while threading.active_count() < WORKER_COUNT:
             pass
         temp = jobFn(*args)
+        let cluster know you done with the job
+        cluster sets the status of that job to complete
+        computer asks 'any more jobs pending?' to cluster
+        if cluster responds true
+        computer exits and once main thread is retrieved cluster assigns new job and status of job is set to running
+        else 
+        computer waits until all jobs have a status of completed
+        then threads exit in bulk 
         with lock:
             exitCounter += 1
+            fn()
         while exitCounter < len(jobs):
             #if job scheduled, do job
             pass
@@ -80,8 +89,10 @@ with concurrent.futures.ThreadPoolExecutor(max_workers=WORKER_COUNT, initializer
     ax = time.time()
     for i in range(len(jobs)):
         futures.append(executor.submit(jobWrapper(jobs[i][0], jobs[i][1])))
-    for i in range(WORKER_COUNT - len(jobs)):
-        futures.append(executor.submit(jobWrapper(idle)))
+    while not all jobs complete:
+        if threading.active_count() < WORKER_COUNT:
+            job = jobWrapper(jobs[i][0], jobs[i][1]) if not all jobs complete else idle
+            futures.append(executor.submit(job))
     bx = time.time()
     print(bx - ax)
 concurrent.futures.wait(futures, return_when='ALL_COMPLETED')
