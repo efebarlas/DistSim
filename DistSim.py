@@ -1,25 +1,66 @@
+import concurrent.futures
+import threading
+from uuid import uuid4
+
+def printer(future):
+    print(future.result())
 class Cluster():
-    def __init__(self):
-        __futures__ = []
-        __jobs__ 
+    def __barrierFn__(self):
+        self.__barrier__.wait()
+    def __job_done__(self, uid):
+        with self.__job_lock__:
+            self.__jobs__['assigned'].remove(uid)
+            self.__jobs__['completed'].add(uid)
+    def __jobs_running__(self):
+        with self.__job_lock__:
+            return len(self.__jobs__['assigned']) > 0
+    def __jobs_left__(self):
+        with self.__job_lock__:
+            return len(self.__jobs__['pending']) > 0
+    def __job_wrap__(self, jobFn, *args):
+        uid = uuid4()
+        def cb():
+            while threading.active_count() < self.__worker_count__:
+                pass
+            return_value = jobFn(*args)
+            self.__job_done__(uid)
+            while self.__jobs_running__() and not self.__jobs_left__():
+                    pass
+            return return_value
+        return uid, cb
+    def __init__(self, WORKER_COUNT):
+        self.__futures__ = []
+        self.__jobs__ = dict()
+        self.__jobs__['pending'] = dict()
+        self.__jobs__['completed'] = set()
+        self.__jobs__['assigned'] = set()
+        self.__barrier__ = threading.Barrier(WORKER_COUNT)
+        self.__worker_count__ = WORKER_COUNT
+        self.__job_lock__ = threading.Lock()
         # computer instances should be stored
         # job queue
         # job status register array for scheduling
         # assign new jobs with a lock
+    def __idle__(self):
+        return
     def runJobs(self):
-        futures = []
-    futuresOccupied = [] # -1 ->
-    tasksCompleted = False
-    with concurrent.futures.ThreadPoolExecutor(max_workers=WORKER_COUNT, initializer=barrierFn) as executor:
-        ax = time.time()
-        for i in range(len(jobs)):
-            futures.append(executor.submit(jobWrapper(jobs[i][0], jobs[i][1])))
-        while not all jobs complete:
-            if threading.active_count() < WORKER_COUNT:
-                job = jobWrapper(jobs[i][0], jobs[i][1]) if not all jobs complete else idle
-                futures.append(executor.submit(job))    
-class Computer():
-    def __init__(self):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.__worker_count__, initializer=self.__barrierFn__) as executor:
+            while len(self.__jobs__['pending']) != 0 or len(self.__futures__) < self.__worker_count__:
+                if len(self.__jobs__['pending']) == 0:
+                    uid, job = self.__job_wrap__(self.__idle__)
+                else:
+                    uid, job = self.__jobs__['pending'].popitem()
+                self.__jobs__['assigned'].add(uid)
+                self.__futures__.append(executor.submit(job).add_done_callback(printer))
+    def addJob(self, jobFn, *jobArgs):
+        uid, job = self.__job_wrap__(jobFn, *jobArgs)
+        with self.__job_lock__:
+            self.__jobs__['pending'][uid] = job
+    def removeJob(self, uid):
+        with self.__job_lock__:     
+            self.__jobs__['pending'].pop(uid, None)
+#class Computer():
+#    def __init__(self):
         # local memory
         # future / job
         # a port to receive information from
