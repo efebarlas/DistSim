@@ -1,5 +1,5 @@
 from DistSim import Cluster
-
+import time
 
 cluster = Cluster(5)
 
@@ -12,4 +12,26 @@ cluster.runJobs()
 
 for i in range(50):
     cluster.addJob(job, i)
+a = time.time()
 cluster.runJobs()
+print(time.time()- a)
+
+for i in range(100):
+    cluster.addJob(job, i)
+a = time.time()
+cluster.runJobs()
+print(time.time()- a)
+
+
+for i in range(200):
+    cluster.addJob(job, i)
+a = time.time()
+cluster.runJobs()
+print(time.time()- a)
+
+
+for i in range(400):
+    cluster.addJob(job, i)
+a = time.time()
+cluster.runJobs()
+print(time.time()- a)

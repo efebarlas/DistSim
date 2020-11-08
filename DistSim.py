@@ -3,7 +3,7 @@ import threading
 from uuid import uuid4
 
 def printer(future):
-    print(future.result())
+    print(str(future.result()) + '\n')
 class Cluster():
     def __barrierFn__(self):
         self.__barrier__.wait()
@@ -11,6 +11,9 @@ class Cluster():
         with self.__job_lock__:
             self.__jobs__['assigned'].remove(uid)
             self.__jobs__['completed'].add(uid)
+    def __exit__(self):
+        with self.__job_lock__:
+            self.__count__ -= 1
     def __jobs_running__(self):
         with self.__job_lock__:
             return len(self.__jobs__['assigned']) > 0
@@ -26,10 +29,12 @@ class Cluster():
             self.__job_done__(uid)
             while self.__jobs_running__() and not self.__jobs_left__():
                     pass
+            self.__exit__()
             return return_value
         return uid, cb
     def __init__(self, WORKER_COUNT):
         self.__futures__ = []
+        self.__count__ = 0
         self.__jobs__ = dict()
         self.__jobs__['pending'] = dict()
         self.__jobs__['completed'] = set()
@@ -45,13 +50,16 @@ class Cluster():
         return
     def runJobs(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.__worker_count__, initializer=self.__barrierFn__) as executor:
-            while len(self.__jobs__['pending']) != 0 or len(self.__futures__) < self.__worker_count__:
+            while len(self.__jobs__['pending']) != 0  or self.__count__ < self.__worker_count__:
+                if self.__count__ == self.__worker_count__:
+                    continue
                 if len(self.__jobs__['pending']) == 0:
                     uid, job = self.__job_wrap__(self.__idle__)
                 else:
                     uid, job = self.__jobs__['pending'].popitem()
                 self.__jobs__['assigned'].add(uid)
-                self.__futures__.append(executor.submit(job).add_done_callback(printer))
+                self.__count__ += 1
+                self.__futures__.append(executor.submit(job)) #.add_done_callback(printer))
     def addJob(self, jobFn, *jobArgs):
         uid, job = self.__job_wrap__(jobFn, *jobArgs)
         with self.__job_lock__:
