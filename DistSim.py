@@ -8,17 +8,17 @@ class Cluster():
     def __barrierFn__(self):
         self.__barrier__.wait()
     def __job_done__(self, uid):
-        with self.__job_lock__:
+        with self.__job_locks__['jobs']:
             self.__jobs__['assigned'].remove(uid)
             self.__jobs__['completed'].add(uid)
     def __exit__(self):
-        with self.__job_lock__:
+        with self.__job_locks__['count']:
             self.__count__ -= 1
     def __jobs_running__(self):
-        with self.__job_lock__:
+        with self.__job_locks__['jobs']:
             return len(self.__jobs__['assigned']) > 0
     def __jobs_left__(self):
-        with self.__job_lock__:
+        with self.__job_locks__['jobs']:
             return len(self.__jobs__['pending']) > 0
     def __job_wrap__(self, jobFn, *args):
         uid = uuid4()
@@ -36,7 +36,7 @@ class Cluster():
                 print(e)
         return uid, cb
     def __init__(self, WORKER_COUNT):
-        self.__storage__ = dict()
+        self.storage = dict()
         self.__futures__ = []
         self.__count__ = 0
         self.__jobs__ = dict()
@@ -45,6 +45,11 @@ class Cluster():
         self.__jobs__['assigned'] = set()
         self.__barrier__ = threading.Barrier(WORKER_COUNT)
         self.__worker_count__ = WORKER_COUNT
+        self.__job_locks__ = {
+            'jobs': threading.Lock(),
+            'count': threading.Lock(),
+            'storage': threading.Lock()
+        }
         self.__job_lock__ = threading.Lock()
         # computer instances should be stored
         # job queue
@@ -54,7 +59,7 @@ class Cluster():
         return
     def runJobs(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.__worker_count__, initializer=self.__barrierFn__) as executor:
-            self.__storage__['sum'] = 0
+            self.storage['sum'] = 0
             while len(self.__jobs__['pending']) != 0  or self.__count__ < self.__worker_count__:
                 if self.__count__ == self.__worker_count__:
                     continue
@@ -67,10 +72,10 @@ class Cluster():
                 self.__futures__.append(executor.submit(job)) #.add_done_callback(printer))
     def addJob(self, jobFn, *jobArgs):
         uid, job = self.__job_wrap__(jobFn, *jobArgs)
-        with self.__job_lock__:
+        with self.__job_locks__['jobs']:
             self.__jobs__['pending'][uid] = job
     def removeJob(self, uid):
-        with self.__job_lock__:     
+        with self.__job_locks__['jobs']:     
             self.__jobs__['pending'].pop(uid, None)
 #class Computer():
 #    def __init__(self):
