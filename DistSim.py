@@ -23,16 +23,20 @@ class Cluster():
     def __job_wrap__(self, jobFn, *args):
         uid = uuid4()
         def cb():
-            while threading.active_count() < self.__worker_count__:
-                pass
-            return_value = jobFn(*args)
-            self.__job_done__(uid)
-            while self.__jobs_running__() and not self.__jobs_left__():
+            try:
+                while threading.active_count() < self.__worker_count__:
                     pass
-            self.__exit__()
-            return return_value
+                return_value = jobFn(*args)
+                self.__job_done__(uid)
+                while self.__jobs_running__() and not self.__jobs_left__():
+                        pass
+                self.__exit__()
+                return return_value
+            except Exception as e:
+                print(e)
         return uid, cb
     def __init__(self, WORKER_COUNT):
+        self.__storage__ = dict()
         self.__futures__ = []
         self.__count__ = 0
         self.__jobs__ = dict()
@@ -50,6 +54,7 @@ class Cluster():
         return
     def runJobs(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.__worker_count__, initializer=self.__barrierFn__) as executor:
+            self.__storage__['sum'] = 0
             while len(self.__jobs__['pending']) != 0  or self.__count__ < self.__worker_count__:
                 if self.__count__ == self.__worker_count__:
                     continue
@@ -69,6 +74,7 @@ class Cluster():
             self.__jobs__['pending'].pop(uid, None)
 #class Computer():
 #    def __init__(self):
+
         # local memory
         # future / job
         # a port to receive information from

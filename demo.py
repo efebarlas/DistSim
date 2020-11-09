@@ -4,34 +4,18 @@ import time
 cluster = Cluster(5)
 
 def job(arg):
-    return arg ** 3
+    with cluster.__job_lock__:
+        cluster.__storage__['sum'] += arg ** 3
 
-for i in range(1):
-    cluster.addJob(job, i)
-cluster.runJobs()
-
-for i in range(50):
-    cluster.addJob(job, i)
-a = time.time()
-cluster.runJobs()
-print(time.time()- a)
-
-for i in range(100):
-    cluster.addJob(job, i)
-a = time.time()
-cluster.runJobs()
-print(time.time()- a)
-
-
-for i in range(200):
-    cluster.addJob(job, i)
-a = time.time()
-cluster.runJobs()
-print(time.time()- a)
-
-
-for i in range(400):
-    cluster.addJob(job, i)
-a = time.time()
-cluster.runJobs()
-print(time.time()- a)
+listt = [2, 20, 200, 400, 800, 1600]
+thread_cnt = [1, 5, 25, 125, 625]
+for i in listt:
+    for k in thread_cnt:
+        cluster = Cluster(k)
+        for j in range(i):
+            cluster.addJob(job, j)
+        a = time.time()
+        cluster.runJobs()
+        print(time.time()- a)
+        print(cluster.__storage__['sum'])
+        cluster.__storage__['sum'] = 0
